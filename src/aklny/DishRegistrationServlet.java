@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.naming.InitialContext;
@@ -20,6 +21,8 @@ import javax.sql.DataSource;
 
 import org.eclipse.persistence.config.PersistenceUnitProperties;
 
+import com.google.gson.Gson;
+
 /**
  * Servlet implementation class DishRegistrationServlet
  */
@@ -33,7 +36,7 @@ public class DishRegistrationServlet extends HttpServlet {
     private DataSource ds;
     private EntityManagerFactory emf;
 	
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+
     public DishRegistrationServlet() throws ServletException {
         super();
         // TODO Auto-generated constructor stub
@@ -41,7 +44,7 @@ public class DishRegistrationServlet extends HttpServlet {
             InitialContext ctx = new InitialContext();
             ds = (DataSource) ctx.lookup("java:comp/env/jdbc/DefaultDB");
 
-            Map properties = new HashMap();
+            Map<String, DataSource> properties = new HashMap<String, DataSource>();
             properties.put(PersistenceUnitProperties.NON_JTA_DATASOURCE, ds);
             emf = Persistence.createEntityManagerFactory("persistence-with-jpa", properties);
         } catch (NamingException e) {
@@ -52,39 +55,44 @@ public class DishRegistrationServlet extends HttpServlet {
 	/**
 	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
 	 */
+    @SuppressWarnings({ "rawtypes", "unchecked" })
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-		String employeeId = request.getParameter("employee_id");
-		
+
 		 EntityManager em = emf.createEntityManager();
-	     Employee employee =  em.find(Employee.class, Long.valueOf(employeeId));
 	    
-	     
-	     if	(employee.getDishId() != 0 && employee.getChoiceDate().toLocalDate().isEqual(LocalDate.now()))
-	     {
-	    	 Dish dish =  em.find(Dish.class, Long.valueOf(employee.getDishId()));
-	    	 response.getWriter().println("Ur Dish is: " + dish.getDescription());
-	     }
-	     else 
-	    	 response.getWriter().println("U didnt choose a dish for today ");
-	     
+	     DishResponse dishResponse =  new DishResponse();
+	     dishResponse.dishes = em.createNamedQuery("dishes").getResultList();
+	     dishResponse.locations = em.createNamedQuery("locations").getResultList();
+         // not the best practice though
+	     response.addHeader("Access-Control-Allow-Origin", "*");
+	     response.getWriter().print(new Gson().toJson(dishResponse));
+
+//	     
 	}
 
 	/**
 	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
 		String employeeId = request.getParameter("employee_id");
         String dishId = request.getParameter("dish_id");
         String locationId = request.getParameter("location_id");
-        // TODO add location
         // TODO add validation on these params 
         // may be later
-        if(employeeId == null || dishId == null || locationId == null)
+        response.addHeader("Access-Control-Allow-Origin", "*");
+        if(Utils.isNotValid(employeeId) || Utils.isNotValid(dishId)|| Utils.isNotValid(locationId))
         {
-        	response.getWriter().println("please choose dish and location");
+        	response.setStatus(422);
+        	response.getWriter().println(new Response("failed", "please choose dish and location"));
         	return;
+        }
+        
+        if(!Utils.canSubmit())
+        {
+        	response.setStatus(422);
+        	response.getWriter().println(new Response("failed", "Invalid Time, cant change the chosen dish"));
+        	return;
+  
         }
         EntityManager em = emf.createEntityManager();
         Employee employee =  em.find(Employee.class, Long.valueOf(employeeId));
@@ -94,9 +102,18 @@ public class DishRegistrationServlet extends HttpServlet {
         employee.setChoiceDate(Date.valueOf(LocalDate.now()));
         employee.setChoiceLocationId(Integer.valueOf(locationId));
         em.getTransaction().commit();
-        response.sendRedirect("?employee_id=" + employeeId);
         
+        response.getWriter().println(new Response("sucess", "Ur Choice was recorded"));
         
 	}
-
+	
+	
+	@SuppressWarnings("unused")
+	private class DishResponse
+	{
+		public List<Dish> dishes;
+		public List<Location> locations;
+	}
+	
+	
 }

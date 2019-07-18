@@ -19,6 +19,9 @@ import javax.servlet.http.HttpServletResponse;
 import javax.sql.DataSource;
 
 import org.eclipse.persistence.config.PersistenceUnitProperties;
+import org.json.JSONObject;
+
+import com.google.gson.Gson;
 
 
 /**
@@ -57,34 +60,16 @@ public class aklny extends HttpServlet {
      */
     public aklny() {
         super();
-        // TODO Auto-generated constructor stub
     }
 
 	/**
 	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-		
-		response.getWriter().println("<p>Aknly!</p>");
-		
-		response.getWriter().println(getLoginForm());
+		response.addHeader("Access-Control-Allow-Origin", "*");
+		response.getWriter().print(new OdataReader().getEmployeesJson());
 	}
 	
-	private String getLoginForm() {
-		String respond = "<select name=\"username\" form=\"userform\">\n";
-		List<String> odataUsernames = new OdataReader().getDefaultEmployeesUsernames();
-		for (String username : odataUsernames) {
-			respond += "<option value=\"" + username + "\">" + username + "</option>\n";
-		}
-		respond += "</select>\n" + 
-				"\n" + 
-				"<form action=\"\" method=\"post\" id=\"userform\">\n" + 
-				"  password:<input type=\"password\" name=\"password\">\n" + 
-				"  <input type=\"submit\">\n" + 
-				"</form>\n";
-		return respond;
-	}
 	
 	/**
 	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
@@ -94,6 +79,7 @@ public class aklny extends HttpServlet {
 //		doGet(request, response);
 		String username = request.getParameter("username");
         String password = request.getParameter("password");
+        response.addHeader("Access-Control-Allow-Origin", "*");
 		if (username != null && !username.isEmpty())
 		{
 			EntityManager em = emf.createEntityManager();
@@ -118,38 +104,39 @@ public class aklny extends HttpServlet {
 				// get first employee
 				// there is only one btw 
 				employee = employees.get(0);
-			
+				
 				// check on date
 				
 			}
-			// check on password and return error if wrong password 
-			//  may be later :) 
 			if (!employee.getPassword().equals(password))
 			{
+				response.sendError(402);
 				response.getWriter().println("wrong Password");
 				return;
 			}
-			if(canSubmit())
+			if(Utils.canSubmit())
 			{
 				// view the dishes submission page
-				response.getWriter().println(getDishesForm(em, employee));
+				JSONObject obj = new JSONObject();
+				obj.put("user_id", employee.getId());
+				obj.put("status", "can_register");
+				response.getWriter().println(obj.toString());
 			}
 			else 
 			{
-				// or display the chosen dish 
-				response.sendRedirect("dish_registration?employee_id=" + employee.getId());
+				// view the dishes submission page
+				JSONObject obj = new JSONObject();
+				obj.put("user_id", employee.getId());
+				obj.put("status", "cant_register");
+				response.getWriter().println(obj.toString());
 			}
 		}
 		
 			
 	}
 	
-	private boolean canSubmit() {
-			LocalTime now = LocalTime.now();
-			// these variables changes according to server time :)
-			return now.isBefore(LocalTime.of(10, 0)) || now.isAfter(LocalTime.of(13, 0));
-	}
-	
+	// for testing, no need for this atm 
+	// TODO remove later 
 	private String getDishesForm(EntityManager em, Employee employee)
 	{
 		@SuppressWarnings("unchecked")
